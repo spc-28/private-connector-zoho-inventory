@@ -17,7 +17,9 @@ def main() -> None:
         prog="zoho-connector-setup", description="Authorize the read-only Zoho Inventory connector."
     )
     parser.add_argument("--self-client-code", help="Grant code from a Zoho Self Client (headless).")
-    parser.add_argument("--force", action="store_true", help="Authorize again even if tokens exist.")
+    parser.add_argument(
+        "--force", action="store_true", help="Authorize again even if tokens exist."
+    )
     parser.add_argument("--logout", action="store_true", help="Revoke and forget the tokens.")
     args = parser.parse_args()
     settings = Settings()
@@ -39,8 +41,10 @@ async def _run(settings: Settings, args: argparse.Namespace) -> None:
     else:
         tokens = await _authorize(settings, args.self_client_code)
         token_store.save(tokens)
-        print(f"Authorized. Data center API: {tokens.api_domain}. "
-              f"Refresh token {redact(tokens.refresh_token)} saved to the OS keychain.")
+        print(
+            f"Authorized. Data center API: {tokens.api_domain}. "
+            f"Refresh token {redact(tokens.refresh_token)} saved to the OS keychain."
+        )
     await _choose_organization(settings)
 
 
@@ -56,7 +60,9 @@ async def _authorize(settings: Settings, self_client_code: str | None) -> Tokens
     if "code" not in params:
         sys.exit(f"Zoho did not grant access: {params.get('error', 'unknown error')}")
     accounts_server = params.get("accounts-server", settings.accounts_url)
-    return await oauth.exchange_code(settings, accounts_server, params["code"], settings.redirect_uri)
+    return await oauth.exchange_code(
+        settings, accounts_server, params["code"], settings.redirect_uri
+    )
 
 
 async def _choose_organization(settings: Settings) -> None:
