@@ -23,4 +23,6 @@ def build(context: Context | None = None) -> MCPServer:
 
 def main() -> None:
     logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(levelname)s %(message)s")
+    # Request URLs carry payment references and the organization ID; keep them out of logs.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     build().run("stdio")

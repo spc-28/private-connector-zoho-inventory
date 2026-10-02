@@ -67,22 +67,48 @@ async def main(only: set[str] | None) -> int:
     cases = json.loads((HERE / "questions.json").read_text())
     cases = [case for case in cases if not only or case["id"] in only]
     client = AsyncAnthropic()
-    results = []
+    results = _load_results()
     async with open_session() as session:
         tools = [async_mcp_tool(tool, session) for tool in (await session.list_tools()).tools]
         for case in cases:
             result = await run_case(client, session, tools, case)
-            results.append(result)
+            results[result["id"]] = result
             print(f"{result['id']} {'PASS' if result['passed'] else 'FAIL'} {result['checks']}")
-    (HERE / "results.json").write_text(json.dumps(results, indent=2))
-    passed = sum(result["passed"] for result in results)
-    print(f"\n{passed}/{len(results)} passed. Details in evals/results.json")
-    return 0 if passed == len(results) else 1
+    return _save_and_summarize(results)
+
+
+def regrade() -> int:
+    """Re-scores saved answers with the current grader. No API calls, no cost."""
+    cases = {case["id"]: case for case in json.loads((HERE / "questions.json").read_text())}
+    results = _load_results()
+    for result in results.values():
+        result.update(grade(cases[result["id"]], result["answer"], result["tool_calls"]))
+    return _save_and_summarize(results)
+
+
+def _load_results() -> dict[str, dict]:
+    path = HERE / "results.json"
+    saved = json.loads(path.read_text()) if path.exists() else []
+    return {result["id"]: result for result in saved}
+
+
+def _save_and_summarize(results: dict[str, dict]) -> int:
+    ordered = [results[key] for key in sorted(results)]
+    (HERE / "results.json").write_text(json.dumps(ordered, indent=2))
+    for result in ordered:
+        failed = [name for name, ok in result["checks"].items() if not ok]
+        print(f"{result['id']} {'PASS' if result['passed'] else 'FAIL'} {failed or ''}")
+    passed = sum(result["passed"] for result in ordered)
+    print(f"\n{passed}/{len(ordered)} passed. Details in evals/results.json")
+    return 0 if passed == len(ordered) else 1
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--only", help="Comma-separated question IDs, e.g. Q01,Q12")
+    parser.add_argument("--regrade", action="store_true", help="Re-score saved answers for free.")
     args = parser.parse_args()
+    if args.regrade:
+        sys.exit(regrade())
     only = set(args.only.split(",")) if args.only else None
     sys.exit(anyio.run(main, only))
