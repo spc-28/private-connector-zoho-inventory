@@ -151,7 +151,7 @@ async def ensure_items(zoho: Zoho) -> dict[str, dict]:
         else:
             _report("exists", f"item {item.sku}")
         row = existing[item.sku]
-        if str(row.get("reorder_level")) != str(item.reorder_level):
+        if not _same_number(row.get("reorder_level"), item.reorder_level):
             await set_reorder_level(zoho, row["item_id"], item.reorder_level, item.sku)
         items[item.sku] = {"id": row["item_id"], "rate": item.rate, "stock": item.stock}
     return items
@@ -160,7 +160,7 @@ async def ensure_items(zoho: Zoho) -> dict[str, dict]:
 async def set_reorder_level(zoho: Zoho, item_id: str, level: int, sku: str) -> None:
     body = {"reorder_level": level}
     updated = (await zoho.call("PUT", f"/items/{item_id}", json=body))["item"]
-    status = "reorder" if str(updated.get("reorder_level")) == str(level) else "warning"
+    status = "reorder" if _same_number(updated.get("reorder_level"), level) else "warning"
     _report(status, f"item {sku} reorder level now {updated.get('reorder_level')!r}")
 
 
@@ -169,16 +169,13 @@ async def ensure_opening_stock(zoho: Zoho, items: dict) -> None:
     if any(row.get("reference_number") == STOCK_REFERENCE for row in adjustments):
         _report("exists", "opening stock adjustment")
         return
-    locations = (await zoho.call("GET", "/locations")).get("locations", [])
-    location = {"location_id": locations[0]["location_id"]} if locations else {}
     body = {
         "date": _today(),
         "reason": "Demo opening stock",
         "adjustment_type": "quantity",
         "reference_number": STOCK_REFERENCE,
         "line_items": [
-            {"item_id": item["id"], "quantity_adjusted": item["stock"], **location}
-            for item in items.values()
+            {"item_id": item["id"], "quantity_adjusted": item["stock"]} for item in items.values()
         ],
     }
     await zoho.call("POST", "/inventoryadjustments", json=body)
@@ -298,6 +295,13 @@ async def create_shipment(zoho: Zoho, so_id: str, package_id: str, order: Order)
     params = {"package_ids": package_id, "salesorder_id": so_id}
     shipment = await zoho.call("POST", "/shipmentorders", params=params, json=body)
     return shipment["shipmentorder"]["shipment_id"]
+
+
+def _same_number(value, expected: int) -> bool:
+    try:
+        return float(value) == expected
+    except (TypeError, ValueError):
+        return False
 
 
 def _suffix(order: Order) -> str:
