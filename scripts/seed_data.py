@@ -84,9 +84,8 @@ async def seed(settings: SeedSettings, code: str) -> None:
             zoho = Zoho(http, tokens["api_domain"])
             org = await pick_organization(zoho, settings.org_name)
             zoho.org_id = org["organization_id"]
-            india = org.get("currency_code") == "INR"
             item_ids = await ensure_items(zoho)
-            customer_ids = await ensure_customers(zoho, india)
+            customer_ids = await ensure_customers(zoho)
             existing = {
                 row.get("reference_number"): row["salesorder_id"]
                 for row in await zoho.list_all("/salesorders", "salesorders")
@@ -154,7 +153,7 @@ async def ensure_items(zoho: Zoho) -> dict[str, dict]:
     return items
 
 
-async def ensure_customers(zoho: Zoho, india: bool) -> dict[str, str]:
+async def ensure_customers(zoho: Zoho) -> dict[str, str]:
     existing = {
         row.get("email"): row["contact_id"] for row in await zoho.list_all("/contacts", "contacts")
     }
@@ -181,8 +180,6 @@ async def ensure_customers(zoho: Zoho, india: bool) -> dict[str, str]:
                 }
             ],
         }
-        if india:
-            body["gst_treatment"] = "consumer"
         contact = (await zoho.call("POST", "/contacts", json=body))["contact"]
         existing[customer.email] = contact["contact_id"]
         _report("created", f"customer {customer.email}")
