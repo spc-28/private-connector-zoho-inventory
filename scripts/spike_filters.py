@@ -22,7 +22,7 @@ async def main() -> None:
         report = await run(context.client, context.settings.payment_link_field)
     finally:
         await context.client.aclose()
-    context.capabilities.write(report)
+    context.capabilities.save(report)
     print_report(report, context.capabilities.path)
 
 

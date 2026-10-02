@@ -7,6 +7,13 @@ class Capabilities:
     def __init__(self, store: JsonFile):
         self._store = store
 
+    @property
+    def path(self):
+        return self._store.path
+
+    def save(self, report: dict) -> None:
+        self._store.write(report)
+
     def verified(self, name: str) -> bool:
         return self._filters().get(name) == "verified"
 

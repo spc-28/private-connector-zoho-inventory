@@ -4,7 +4,7 @@ import sys
 from mcp.server.mcpserver import MCPServer
 
 from zoho_connector.context import Context
-from zoho_connector.tools import status
+from zoho_connector.tools import evidence, items, orders, status
 
 INSTRUCTIONS = (
     "Read-only access to one merchant's Zoho Inventory: orders, invoices, shipments and stock. "
@@ -16,7 +16,8 @@ INSTRUCTIONS = (
 def build(context: Context | None = None) -> MCPServer:
     context = context or Context.create()
     server = MCPServer("zoho-inventory", instructions=INSTRUCTIONS)
-    status.register(server, context)
+    for module in (status, orders, evidence, items):
+        module.register(server, context)
     return server
 
 

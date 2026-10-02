@@ -25,7 +25,7 @@ def register(server: MCPServer, context: Context) -> None:
                 "data_center": context.tokens.api_domain if context.tokens.authorized else None,
                 "zoho_calls_today": context.quota.used(),
                 "daily_limit": context.quota.limit,
-                "verified_lookups": _verified_lookups(context),
+                "verified_lookups": context.capabilities.verified_names() or "spike not run",
             }
         )
 
@@ -40,10 +40,3 @@ async def _authorized(context: Context) -> bool:
             return False
         raise
     return True
-
-
-def _verified_lookups(context: Context) -> list[str] | str:
-    filters = context.capabilities.read().get("salesorder_filters")
-    if filters is None:
-        return "spike not run"
-    return sorted(name for name, verdict in filters.items() if verdict == "verified")

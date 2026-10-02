@@ -27,8 +27,9 @@ class OrderFilters:
 @dataclass
 class OrderPage:
     rows: list[dict]
-    has_more: bool
+    next_state: dict | None
     filtered_locally: list[str]
+    scan_finished: bool = True
 
 
 class OrderService:
@@ -40,11 +41,19 @@ class OrderService:
         self._settings = settings
         self._details: dict[str, tuple[float, dict]] = {}
 
-    async def search(self, filters: OrderFilters, page: int, per_page: int) -> OrderPage:
+    async def search(self, filters: OrderFilters, state: dict, limit: int) -> OrderPage:
+        """Server-side paging when every filter is verified; otherwise a bounded local scan."""
         params, checks = self._plan(filters)
-        rows, has_more = await self._page(params, page, per_page)
-        rows = [row for row in rows if all(check(row) for _, check in checks)]
-        return OrderPage(rows, has_more, [name for name, _ in checks])
+        if not checks:
+            page = state.get("p", 1)
+            rows, has_more = await self._page(params, page, limit)
+            return OrderPage(rows, {"p": page + 1} if has_more else None, [])
+        offset = state.get("o", 0)
+        rows, finished = await self.scan(params, lambda r: all(check(r) for _, check in checks))
+        more = offset + limit < len(rows)
+        next_state = {"o": offset + limit} if more else None
+        names = [name for name, _ in checks]
+        return OrderPage(rows[offset : offset + limit], next_state, names, finished)
 
     async def scan(self, params: dict, match: Check) -> tuple[list[dict], bool]:
         """Pages through orders up to the scan cap. Returns matches and whether the scan finished."""

@@ -26,7 +26,9 @@ def contest_buckets(
         },
         "shipping_proof": {
             "documents": [
-                {"document_type": "package_slip", "id": p["package_id"]} for p in packages
+                {"document_type": "package_slip", "id": p["package_id"]}
+                for p in packages
+                if p.get("shipment_id")
             ],
             "facts": {
                 key: delivery.get(key)
