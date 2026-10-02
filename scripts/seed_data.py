@@ -199,7 +199,7 @@ async def ensure_order(zoho: Zoho, order: Order, items: dict, customers: dict, e
     target = STAGES.index(order.outcome)
     package = (so.get("packages") or [None])[0]
     if target >= 1 and package is None:
-        package = await create_package(zoho, so)
+        package = await create_package(zoho, so, order)
     shipment_id = package.get("shipment_id") if package else None
     if target >= 2 and not shipment_id:
         shipment_id = await create_shipment(zoho, so_id, package["package_id"], order)
@@ -221,8 +221,9 @@ async def create_order(zoho: Zoho, order: Order, items: dict, customers: dict) -
     return (await zoho.call("POST", "/salesorders", json=body))["salesorder"]["salesorder_id"]
 
 
-async def create_package(zoho: Zoho, so: dict) -> dict:
+async def create_package(zoho: Zoho, so: dict, order: Order) -> dict:
     body = {
+        "package_number": f"PKG-{_suffix(order)}",
         "date": _today(),
         "line_items": [
             {"so_line_item_id": line["line_item_id"], "quantity": line["quantity"]}
@@ -235,6 +236,7 @@ async def create_package(zoho: Zoho, so: dict) -> dict:
 
 async def create_shipment(zoho: Zoho, so_id: str, package_id: str, order: Order) -> str:
     body = {
+        "shipment_number": f"SHP-{_suffix(order)}",
         "date": _today(),
         "delivery_method": order.carrier,
         "tracking_number": order.tracking,
@@ -242,6 +244,10 @@ async def create_shipment(zoho: Zoho, so_id: str, package_id: str, order: Order)
     params = {"package_ids": package_id, "salesorder_id": so_id}
     shipment = await zoho.call("POST", "/shipmentorders", params=params, json=body)
     return shipment["shipmentorder"]["shipment_id"]
+
+
+def _suffix(order: Order) -> str:
+    return order.reference.removeprefix("pay_")
 
 
 def _today() -> str:
