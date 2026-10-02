@@ -243,7 +243,7 @@ async def create_invoice(zoho: Zoho, so: dict, order: Order) -> None:
     body = {
         "customer_id": so["customer_id"],
         "invoice_number": f"INV-{_suffix(order)}",
-        "date": order.date,
+        "date": _today(),
         "reference_number": order.reference,
         "line_items": [
             {
