@@ -21,7 +21,6 @@ class Customer:
     phone: str
     city: str
     state: str
-    state_code: str
 
     @property
     def name(self) -> str:
@@ -47,15 +46,9 @@ ITEMS = (
 )
 
 CUSTOMERS = (
-    Customer(
-        "Aarav", "Mehta", "aarav.mehta@example.com", "9800000001", "Jaipur", "Rajasthan", "RJ"
-    ),
-    Customer(
-        "Meera", "Iyer", "meera.iyer@example.com", "9800000002", "Bengaluru", "Karnataka", "KA"
-    ),
-    Customer(
-        "Kabir", "Sethi", "kabir.sethi@example.com", "9800000003", "Pune", "Maharashtra", "MH"
-    ),
+    Customer("Aarav", "Mehta", "aarav.mehta@example.com", "9800000001", "Jaipur", "Rajasthan"),
+    Customer("Meera", "Iyer", "meera.iyer@example.com", "9800000002", "Bengaluru", "Karnataka"),
+    Customer("Kabir", "Sethi", "kabir.sethi@example.com", "9800000003", "Pune", "Maharashtra"),
 )
 
 CHAI, HONEY, ALMONDS, RICE = (item.sku for item in ITEMS)

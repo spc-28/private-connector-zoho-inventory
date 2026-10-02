@@ -182,7 +182,7 @@ async def ensure_customers(zoho: Zoho, india: bool) -> dict[str, str]:
             ],
         }
         if india:
-            body |= {"gst_treatment": "consumer", "place_of_contact": customer.state_code}
+            body["gst_treatment"] = "consumer"
         contact = (await zoho.call("POST", "/contacts", json=body))["contact"]
         existing[customer.email] = contact["contact_id"]
         _report("created", f"customer {customer.email}")
