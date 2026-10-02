@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-evals = ["claude-agent-sdk"]
+evals = ["anthropic[mcp]"]
 dev = ["ruff"]
 
 [project.scripts]
