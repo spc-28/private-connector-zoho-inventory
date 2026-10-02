@@ -15,9 +15,11 @@ from seed_demo_data import CUSTOMERS, ITEMS, ORDERS, Order
 
 SCOPES = (
     "ZohoInventory.items.ALL,ZohoInventory.contacts.ALL,ZohoInventory.salesorders.ALL,"
-    "ZohoInventory.packages.ALL,ZohoInventory.shipmentorders.ALL,ZohoInventory.settings.READ"
+    "ZohoInventory.packages.ALL,ZohoInventory.shipmentorders.ALL,ZohoInventory.invoices.ALL,"
+    "ZohoInventory.inventoryadjustments.ALL,ZohoInventory.settings.READ"
 )
 STAGES = ("confirmed", "packed", "shipped", "delivered")
+STOCK_REFERENCE = "SEED-OPENING-STOCK"
 
 
 class SeedError(Exception):
@@ -85,6 +87,7 @@ async def seed(settings: SeedSettings, code: str) -> None:
             org = await pick_organization(zoho, settings.org_name)
             zoho.org_id = org["organization_id"]
             item_ids = await ensure_items(zoho)
+            await ensure_opening_stock(zoho, item_ids)
             customer_ids = await ensure_customers(zoho)
             existing = {
                 row.get("reference_number"): row["salesorder_id"]
@@ -142,15 +145,44 @@ async def ensure_items(zoho: Zoho) -> dict[str, dict]:
                 "rate": item.rate,
                 "purchase_rate": item.purchase_rate,
                 "reorder_level": item.reorder_level,
-                "initial_stock": item.stock,
-                "initial_stock_rate": item.purchase_rate,
             }
             existing[item.sku] = (await zoho.call("POST", "/items", json=body))["item"]
             _report("created", f"item {item.sku}")
         else:
             _report("exists", f"item {item.sku}")
-        items[item.sku] = {"id": existing[item.sku]["item_id"], "rate": item.rate}
+        row = existing[item.sku]
+        if str(row.get("reorder_level")) != str(item.reorder_level):
+            await set_reorder_level(zoho, row["item_id"], item.reorder_level, item.sku)
+        items[item.sku] = {"id": row["item_id"], "rate": item.rate, "stock": item.stock}
     return items
+
+
+async def set_reorder_level(zoho: Zoho, item_id: str, level: int, sku: str) -> None:
+    body = {"reorder_level": level}
+    updated = (await zoho.call("PUT", f"/items/{item_id}", json=body))["item"]
+    status = "reorder" if str(updated.get("reorder_level")) == str(level) else "warning"
+    _report(status, f"item {sku} reorder level now {updated.get('reorder_level')!r}")
+
+
+async def ensure_opening_stock(zoho: Zoho, items: dict) -> None:
+    adjustments = await zoho.list_all("/inventoryadjustments", "inventory_adjustments")
+    if any(row.get("reference_number") == STOCK_REFERENCE for row in adjustments):
+        _report("exists", "opening stock adjustment")
+        return
+    locations = (await zoho.call("GET", "/locations")).get("locations", [])
+    location = {"location_id": locations[0]["location_id"]} if locations else {}
+    body = {
+        "date": _today(),
+        "reason": "Demo opening stock",
+        "adjustment_type": "quantity",
+        "reference_number": STOCK_REFERENCE,
+        "line_items": [
+            {"item_id": item["id"], "quantity_adjusted": item["stock"], **location}
+            for item in items.values()
+        ],
+    }
+    await zoho.call("POST", "/inventoryadjustments", json=body)
+    _report("created", "opening stock adjustment")
 
 
 async def ensure_customers(zoho: Zoho) -> dict[str, str]:
@@ -205,7 +237,29 @@ async def ensure_order(zoho: Zoho, order: Order, items: dict, customers: dict, e
         shipment_id = await create_shipment(zoho, so_id, package["package_id"], order)
     if target >= 3 and package.get("status") != "delivered":
         await zoho.call("POST", f"/shipmentorders/{shipment_id}/status/delivered")
+    if target >= 1 and not so.get("invoices"):
+        await create_invoice(zoho, so, order)
     _report(order.outcome, f"{order.reference} ({so.get('salesorder_number')})")
+
+
+async def create_invoice(zoho: Zoho, so: dict, order: Order) -> None:
+    body = {
+        "customer_id": so["customer_id"],
+        "invoice_number": f"INV-{_suffix(order)}",
+        "date": order.date,
+        "reference_number": order.reference,
+        "line_items": [
+            {
+                "item_id": line["item_id"],
+                "quantity": line["quantity"],
+                "rate": line["rate"],
+                "salesorder_item_id": line["line_item_id"],
+            }
+            for line in so["line_items"]
+        ],
+    }
+    params = {"ignore_auto_number_generation": "true"}
+    await zoho.call("POST", "/invoices", params=params, json=body)
 
 
 async def create_order(zoho: Zoho, order: Order, items: dict, customers: dict) -> str:
